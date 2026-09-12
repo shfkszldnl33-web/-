@@ -6,8 +6,8 @@
 'use strict';
 
 const path = require('path');
-const BreathingEngine = require(path.join('..', 'breathing-engine.js'));
-const BreathingEngineTests = require(path.join('.', 'breathing-engine.tests.core.js'));
+const BreathingEngine = require(path.join(__dirname, '..', 'breathing-engine.js'));
+const BreathingEngineTests = require(path.join(__dirname, 'breathing-engine.tests.core.js'));
 
 const result = BreathingEngineTests.runAll(BreathingEngine, function (line) { console.log(line); });
 if (result.failed > 0) process.exit(1);
