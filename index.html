@@ -1082,16 +1082,12 @@ p { color: var(--text-secondary); line-height: 1.5; }
                                 <input type="checkbox" id="metronome-enabled-checkbox">
                                 <label for="metronome-enabled-checkbox">호흡 메트로놈 사용 (들이쉬기/내쉬기 리듬 안내)</label>
                             </div>
-                            <div class="flex-row mt-10" style="align-items: center;" id="metronome-bpm-row">
-                                <label for="metronome-bpm-select" style="font-size: 0.85rem; color: var(--text-secondary);">목표 호흡 속도</label>
-                                <select id="metronome-bpm-select" style="background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); color: var(--text-primary); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem;">
-                                    <option value="8">분당 8회 (아주 느리게)</option>
-                                    <option value="10">분당 10회</option>
-                                    <option value="12" selected>분당 12회</option>
-                                    <option value="14">분당 14회</option>
-                                    <option value="16">분당 16회</option>
-                                    <option value="20">분당 20회 (빠르게)</option>
-                                </select>
+                            <div class="mt-10" id="metronome-bpm-row">
+                                <div class="flex-row" style="align-items: center; justify-content: space-between;">
+                                    <label for="metronome-bpm-slider" style="font-size: 0.85rem; color: var(--text-secondary);">목표 호흡 속도</label>
+                                    <span id="metronome-bpm-value" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">분당 12회</span>
+                                </div>
+                                <input type="range" id="metronome-bpm-slider" min="4" max="30" step="1" value="12" style="width: 100%; margin: 8px 0 0; accent-color: var(--accent-green);">
                             </div>
                             <div class="checkbox-group mt-10" id="metronome-sound-row">
                                 <input type="checkbox" id="metronome-sound-checkbox">
@@ -2955,8 +2951,9 @@ p { color: var(--text-secondary); line-height: 1.5; }
       updateMetronomeControlsEnabled();
       restartMetronomeIfRunning();
     });
-    on($('#metronome-bpm-select'), 'change', (e) => {
+    on($('#metronome-bpm-slider'), 'input', (e) => {
       state.settings.metronomeBpm = Number(e.target.value) || 12;
+      $('#metronome-bpm-value').textContent = `분당 ${state.settings.metronomeBpm}회`;
       idbPut('settings', state.settings);
       restartMetronomeIfRunning();
     });
@@ -3003,8 +3000,10 @@ p { color: var(--text-secondary); line-height: 1.5; }
 
     const enabledBox = $('#metronome-enabled-checkbox');
     if (enabledBox) enabledBox.checked = !!state.settings.metronomeEnabled;
-    const bpmSel = $('#metronome-bpm-select');
-    if (bpmSel) bpmSel.value = String(state.settings.metronomeBpm || 12);
+    const bpmSlider = $('#metronome-bpm-slider');
+    if (bpmSlider) bpmSlider.value = String(state.settings.metronomeBpm || 12);
+    const bpmValue = $('#metronome-bpm-value');
+    if (bpmValue) bpmValue.textContent = `분당 ${state.settings.metronomeBpm || 12}회`;
     const soundBox = $('#metronome-sound-checkbox');
     if (soundBox) soundBox.checked = !!state.settings.metronomeSound;
     updateMetronomeControlsEnabled();
@@ -3016,7 +3015,7 @@ p { color: var(--text-secondary); line-height: 1.5; }
     const soundRow = $('#metronome-sound-row');
     if (bpmRow) bpmRow.classList.toggle('disabled-checkbox', !on_);
     if (soundRow) soundRow.classList.toggle('disabled-checkbox', !on_);
-    $('#metronome-bpm-select') && ($('#metronome-bpm-select').disabled = !on_);
+    $('#metronome-bpm-slider') && ($('#metronome-bpm-slider').disabled = !on_);
     $('#metronome-sound-checkbox') && ($('#metronome-sound-checkbox').disabled = !on_);
   }
 
@@ -3121,9 +3120,11 @@ p { color: var(--text-secondary); line-height: 1.5; }
   // resuming here, on every tick, is cheap (resume() on an already-running context is a no-op)
   // and makes the tick self-healing instead of only working once per session by luck.
   //
-  // Also raised from the original 0.12 peak gain / ~180ms length to 0.35 / ~260ms - the quieter,
-  // shorter version was easy to miss even when actually playing, especially over ANC earphones or
-  // any background noise. Still well below a full-volume alert tone.
+  // Switched from a slow sine tone (long exponential decay, read as sluggish/"처지는" rather than
+  // a crisp beat) to a short percussive click: triangle wave (brighter harmonic content than
+  // sine), a fast ~4ms attack, and a ~100ms decay - closer to a real metronome tick - at a high
+  // 0.9 peak gain for audibility. (History: 0.12 peak/180ms -> 0.35/260ms -> 0.7/340ms, all sine;
+  // still below a full-volume alert tone.)
   //
   // KNOWN PLATFORM LIMITATION this does NOT fully fix: on some mobile browsers, once
   // getUserMedia() has an active mic stream, the OS can route ALL audio output on that page
@@ -3140,34 +3141,52 @@ p { color: var(--text-secondary); line-height: 1.5; }
       }
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = isInhale ? 880 : 660;
+      osc.type = 'triangle';
+      osc.frequency.value = isInhale ? 1046 : 784;
       const now = audioCtx.currentTime;
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.35, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+      gain.gain.exponentialRampToValueAtTime(0.9, now + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start(now);
-      osc.stop(now + 0.28);
+      osc.stop(now + 0.12);
     } catch (err) {
       console.warn('[metronome] tick playback failed', err);
     }
   }
 
-  // Standalone test tick for the "소리 테스트" button: creates (or reuses) its OWN AudioContext
+  // Standalone test preview for the "소리 테스트" button: creates (or reuses) its OWN AudioContext
   // instead of requiring b.audioCtx from an active breathing session, so the user can check
   // whether metronome audio works at all - right from the settings panel, without starting a
   // full workout and granting mic permission first. Its resume() call happens directly inside the
   // button's own click handler, i.e. inside a guaranteed, fresh user gesture.
+  //
+  // Plays at the ACTUAL selected speed (same halfCycleMs math as startMetronome()) instead of two
+  // fixed 400ms-apart taps, so what's previewed here is really what plays during a real session -
+  // re-reads state.settings.metronomeBpm on every click, so it reflects whatever speed is
+  // currently selected on the slider. Runs 3 full inhale/exhale cycles, then stops on its own.
   let testAudioCtx = null;
+  let testMetronomeTimer = null;
   async function playTestMetronomeTick() {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!testAudioCtx) testAudioCtx = new AudioCtx();
       if (testAudioCtx.state !== 'running') await testAudioCtx.resume();
-      playMetronomeTick(testAudioCtx, true);
-      setTimeout(() => playMetronomeTick(testAudioCtx, false), 400);
+
+      if (testMetronomeTimer) { clearInterval(testMetronomeTimer); testMetronomeTimer = null; }
+      const bpm = clampMetronomeBpm(state.settings && state.settings.metronomeBpm);
+      const halfCycleMs = 30000 / bpm; // same half-cycle length startMetronome() uses
+      let phase = 'exhale';
+      let ticksLeft = 6; // 3 full inhale/exhale cycles
+      const tick = () => {
+        phase = phase === 'inhale' ? 'exhale' : 'inhale';
+        playMetronomeTick(testAudioCtx, phase === 'inhale');
+        ticksLeft -= 1;
+        if (ticksLeft <= 0 && testMetronomeTimer) { clearInterval(testMetronomeTimer); testMetronomeTimer = null; }
+      };
+      tick();
+      testMetronomeTimer = setInterval(tick, halfCycleMs);
     } catch (err) {
       console.warn('[metronome] test tick failed', err);
       showToast('이 기기/브라우저에서 소리를 재생할 수 없어요.');
