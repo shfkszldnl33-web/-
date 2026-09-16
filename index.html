@@ -583,26 +583,18 @@ p { color: var(--text-secondary); line-height: 1.5; }
 .breathing-metronome-ring.metronome-exhale { transform: scale(0.85); background: rgba(59,130,246,0.15); border-color: var(--accent-blue); }
 .rate-unit { font-size: 1rem; font-weight: 600; color: var(--text-secondary); }
 
-/* Interactive Tour Overlay */
+/* Interactive Tour Overlay (a picker - see showTourItem()'s comment) */
 #tour-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: auto; }
 .tour-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.7); }
-.tour-tooltip { position: absolute; background: #1e293b; border: 2px solid var(--accent-green); border-radius: 16px; padding: 20px; width: 85%; max-width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px var(--accent-green-glow); z-index: 1001; transition: top 0.3s, left 0.3s; }
+.tour-tooltip { background: #1e293b; border: 2px solid var(--accent-green); border-radius: 16px; padding: 20px; max-width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px var(--accent-green-glow); z-index: 1001; }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-/* Tooltip Arrows */
-.tour-tooltip::before, .tour-tooltip::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); border-style: solid; transition: all 0.3s; }
-.tour-tooltip.arrow-up::before { top: -12px; border-width: 0 11px 11px; border-color: transparent transparent var(--accent-green) transparent; z-index: 1; }
-.tour-tooltip.arrow-up::after { top: -9px; border-width: 0 10px 10px; border-color: transparent transparent #1e293b transparent; z-index: 2; }
-.tour-tooltip.arrow-down::before { bottom: -12px; border-width: 11px 11px 0; border-color: var(--accent-green) transparent transparent transparent; z-index: 1; }
-.tour-tooltip.arrow-down::after { bottom: -9px; border-width: 10px 10px 0; border-color: #1e293b transparent transparent transparent; z-index: 2; }
-#tour-text { font-size: 1rem; color: var(--text-primary); margin-bottom: 20px; font-weight: 500; line-height: 1.4; }
-.tour-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.tour-item-btn { display: block; width: 100%; text-align: left; background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); color: var(--text-primary); font-size: 0.9rem; font-weight: 500; border-radius: 10px; padding: 10px 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+.tour-item-btn.active { border-color: var(--accent-green); background: rgba(16,185,129,0.12); }
+#tour-text { font-size: 0.85rem; color: var(--text-primary); margin: 14px 0 0; line-height: 1.55; background: rgba(255,255,255,0.06); border-radius: 10px; padding: 12px; }
+.tour-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .tour-btn { padding: 8px 16px; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; }
 .tour-btn.secondary { background: transparent; color: var(--text-secondary); }
 .tour-btn.primary { background: var(--accent-green); color: #fff; }
-.tour-target-highlight { position: relative; z-index: 1002 !important; pointer-events: none; }
-.tour-target-highlight::after { content: ''; position: absolute; inset: -4px; border: 2px dashed var(--accent-green); border-radius: inherit; animation: pulse-border 1.5s infinite; pointer-events: none;}
-@keyframes pulse-border { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 .mb-20 { margin-bottom: 20px; }
 
 /* History List */
@@ -1482,14 +1474,24 @@ p { color: var(--text-secondary); line-height: 1.5; }
             </button>
         </nav>
 
-        <!-- Interactive Tour Overlay -->
+        <!-- Interactive Tour Overlay: a picker, not a forced walkthrough - selecting any item
+             shows AND speaks that screen's usage description (see SCREEN_HELP/showTourItem()).
+             Can be reopened and re-picked as many times as wanted, in any order. -->
         <div id="tour-overlay" class="hidden">
             <div class="tour-backdrop"></div>
-            <div id="tour-tooltip" class="tour-tooltip">
-                <p id="tour-text">이곳은 앱의 주요 기능입니다.</p>
+            <div id="tour-tooltip" class="tour-tooltip" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); max-height: 80vh; overflow-y: auto; width: 85%;">
+                <h3 style="margin: 0 0 4px; color: var(--text-primary);">둘러보기</h3>
+                <p class="text-muted" style="font-size: 0.8rem; margin: 0 0 14px;">궁금한 항목을 눌러서 사용법을 확인하세요.</p>
+                <div id="tour-item-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <button type="button" class="tour-item-btn" data-view="home">🏠 홈</button>
+                    <button type="button" class="tour-item-btn" data-view="exercise">🏃 운동</button>
+                    <button type="button" class="tour-item-btn" data-view="diet">🍽️ 식단</button>
+                    <button type="button" class="tour-item-btn" data-view="calendar">📅 기록</button>
+                    <button type="button" class="tour-item-btn" data-view="profile">👤 프로필</button>
+                </div>
+                <p id="tour-text" class="hidden"></p>
                 <div class="tour-actions">
-                    <button id="tour-skip-btn" class="tour-btn secondary">중단</button>
-                    <button id="tour-next-btn" class="tour-btn primary">다음</button>
+                    <button id="tour-skip-btn" class="tour-btn secondary">닫기</button>
                 </div>
             </div>
         </div>
@@ -2738,7 +2740,7 @@ p { color: var(--text-secondary); line-height: 1.5; }
 
   function initHome() {
     $all('.btn-voice-help').forEach((btn) => on(btn, 'click', () => {
-      showToast('음성 안내 기능은 다음 업데이트에서 제공될 예정이에요.');
+      speakText(SCREEN_HELP[btn.dataset.view] || '이 화면에 대한 안내가 아직 준비되지 않았어요.');
     }));
     on($('#help-tour-btn'), 'click', () => startTour());
     on($('#voice-toggle-btn'), 'click', (e) => {
@@ -5605,50 +5607,68 @@ p { color: var(--text-secondary); line-height: 1.5; }
   /* 15. Interactive tour                                                */
   /* ------------------------------------------------------------------ */
 
-  const TOUR_STEPS = [
-    { target: '#bottom-nav .nav-item[data-target="view-home"]', text: '홈에서 오늘의 운동/식단 현황을 한눈에 볼 수 있어요.' },
-    { target: '#bottom-nav .nav-item[data-target="view-exercise"]', text: '여기서 Zone 2 운동을 시작하고 심박수 구간을 추정할 수 있어요.' },
-    { target: '#bottom-nav .nav-item[data-target="view-diet"]', text: '식단은 사진, 검색, 음성으로 기록할 수 있어요.' },
-    { target: '#bottom-nav .nav-item[data-target="view-calendar"]', text: '달력에서 지난 기록들을 확인해보세요.' },
-  ];
-  let tourIdx = 0;
+  // Shared by both the per-screen "화면 설명 듣기" (음성 안내) buttons and the "둘러보기" picker
+  // below - one place to write/maintain each screen's usage description instead of two. Richer
+  // than a one-line label on purpose: these are read out loud (speakText) and shown as text, so
+  // they need to stand alone as an actual "how to use this screen" explanation.
+  const SCREEN_HELP = {
+    home: '홈 화면에서는 오늘의 Zone 2 운동 현황과 식단을 한눈에 볼 수 있어요. 아침, 점심, 저녁, 간식 칸을 누르면 그 끼니의 식사를 기록할 수 있고, 위쪽 원형 버튼으로 도움말, 둘러보기, 음성 안내 켜고 끄기를 이용할 수 있어요.',
+    exercise: '운동 화면에서는 호흡 심박수 측정이나 AI 질문 중 하나를 골라 Zone 2 운동을 측정해요. 호흡 심박수 측정은 이어폰이 필요하고, 사용 중인 기기를 먼저 고른 뒤 운동 시작을 누르면 측정이 시작돼요. 호흡 메트로놈을 켜면 들이쉬기와 내쉬기 속도를 맞추는 데 도움을 받을 수 있고, 운동 중에도 속도를 바꿀 수 있어요.',
+    diet: '식단 화면에서는 아침, 점심, 저녁, 간식 칸을 눌러 음식을 기록해요. 음식 추가하기를 누르면 갤러리 사진 분석, 음식 검색, 음성 입력, 직접 입력 네 가지 방법 중 고를 수 있고, 기록된 음식은 눌러서 양을 조절하거나 수정, 삭제할 수 있어요.',
+    calendar: '기록 화면에서는 지난 운동과 식단 기록을 날짜별로 확인할 수 있어요. 달력에서 날짜를 누르면 그날의 상세 기록을 볼 수 있고, 전체 기록 리스트에서 모든 기록을 한번에 볼 수도 있어요.',
+    profile: '프로필 화면에서는 이름, 체중, 목표 체중 변화 같은 내 정보를 수정할 수 있어요. 정보 수정을 누르면 편집할 수 있고, 아래에서 지난 운동 기록표와 검증 모드도 확인할 수 있어요.',
+  };
+  // Bug this fixes ("음성 안내 기능을 추가해줘"): both the per-screen info button and this
+  // function's only caller previously just showed a "coming in a future update" toast - there was
+  // no actual voice output anywhere in the app, even though a mute/unmute toggle for it already
+  // existed on the home screen (#voice-toggle-btn, safeLocalGet('voiceMuted', ...)). Wires that
+  // existing toggle to something real: Web Speech API's speechSynthesis, with a text-only fallback
+  // for browsers that don't support it (or when the user has muted it) so the information is
+  // never lost, just not spoken.
+  function speakText(text) {
+    if (!text) return;
+    const muted = safeLocalGet('voiceMuted', false);
+    if (!muted && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel(); // don't stack utterances if triggered again mid-speech
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ko-KR';
+        window.speechSynthesis.speak(utter);
+        return;
+      } catch (err) { /* fall through to the text-only toast below */ }
+    }
+    showToast(text);
+  }
 
   function initTour() {
     on($('#tour-skip-btn'), 'click', endTour);
-    on($('#tour-next-btn'), 'click', nextTourStep);
+    $all('.tour-item-btn').forEach((btn) => on(btn, 'click', () => showTourItem(btn.dataset.view)));
   }
 
+  // Bug this fixes ("둘러보기 항목을 선택하면 각 항목마다 사용방법을 알려주는 기능을 추가해줘"):
+  // the old tour auto-walked through 4 fixed steps with only a "다음"(next) button - there was no
+  // way to pick a specific screen and just hear about that one. Now opens as a picker: choosing
+  // any item shows (and speaks) that screen's SCREEN_HELP text, in any order, as many times as
+  // wanted, instead of a forced one-way sequence.
   function startTour() {
-    tourIdx = 0;
+    $all('.tour-item-btn').forEach((btn) => btn.classList.remove('active'));
+    $('#tour-text').classList.add('hidden');
     $('#tour-overlay').classList.remove('hidden');
-    showTourStep();
   }
 
-  function showTourStep() {
-    $all('.tour-target-highlight').forEach((el) => el.classList.remove('tour-target-highlight'));
-    const step = TOUR_STEPS[tourIdx];
-    if (!step) { endTour(); return; }
-    const targetEl = $(step.target);
-    $('#tour-text').textContent = step.text;
-    if (targetEl) {
-      targetEl.classList.add('tour-target-highlight');
-      const rect = targetEl.getBoundingClientRect();
-      const tooltip = $('#tour-tooltip');
-      tooltip.style.top = Math.max(20, rect.top - 140) + 'px';
-      tooltip.style.left = Math.max(10, rect.left - 60) + 'px';
-      tooltip.classList.add('arrow-down');
-    }
-  }
-
-  function nextTourStep() {
-    tourIdx += 1;
-    if (tourIdx >= TOUR_STEPS.length) { endTour(); return; }
-    showTourStep();
+  function showTourItem(view) {
+    const text = SCREEN_HELP[view];
+    if (!text) return;
+    $all('.tour-item-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === view));
+    const textEl = $('#tour-text');
+    textEl.textContent = text;
+    textEl.classList.remove('hidden');
+    speakText(text);
   }
 
   function endTour() {
-    $all('.tour-target-highlight').forEach((el) => el.classList.remove('tour-target-highlight'));
     $('#tour-overlay').classList.add('hidden');
+    window.speechSynthesis && window.speechSynthesis.cancel();
     if (state.settings) { state.settings.tourSeen = true; idbPut('settings', state.settings); }
   }
 
