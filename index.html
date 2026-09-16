@@ -3052,7 +3052,15 @@ p { color: var(--text-secondary); line-height: 1.5; }
       updateMetronomeControlsEnabled();
       restartMetronomeIfRunning();
     });
-    on($('#metronome-bpm-slider'), 'input', (e) => applyMetronomeBpm(e.target.value));
+    // Bug this fixes ("소리 테스트를 안 누르면 바뀐 분당 횟수를 들을 수 없어"): dragging this
+    // slider before a workout starts updated the stored BPM, but gave no audible feedback unless
+    // the user separately pressed "소리 테스트" again afterward - the drag itself was silent.
+    // Auto-restarting the standalone test preview on every drag gives immediate audio feedback at
+    // the new speed. This is deliberately wired ONLY on this pre-start slider, not the in-session
+    // one below - during an actual workout the real metronome is already audibly playing, and
+    // triggering this separate preview on top of it would reproduce the overlapping-sound bug
+    // fixed elsewhere (see stopTestMetronomeTick()'s own comment).
+    on($('#metronome-bpm-slider'), 'input', (e) => { applyMetronomeBpm(e.target.value); playTestMetronomeTick(); });
     on($('#breathing-metronome-bpm-slider'), 'input', (e) => applyMetronomeBpm(e.target.value));
     on($('#metronome-sound-checkbox'), 'change', (e) => {
       state.settings.metronomeSound = !!e.target.checked;
