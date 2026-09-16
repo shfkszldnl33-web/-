@@ -990,6 +990,14 @@ p { color: var(--text-secondary); line-height: 1.5; }
                         <div id="breathing-metronome-ring" class="hidden breathing-metronome-ring">
                             <span id="breathing-metronome-label">들이쉬기</span>
                         </div>
+                        <!-- Mid-workout metronome on/off (independent of the metronomeEnabled setting
+                             chosen before starting): lets the user turn the pacing aid on or off at
+                             any point during a breathing-mode session, not just before starting one.
+                             See toggleMetronomeMidExercise() - it starts/stops startMetronome()/
+                             stopMetronome() directly and keeps state.settings.metronomeEnabled (and
+                             therefore the setup-screen checkbox) in sync, so the two controls never
+                             disagree about whether the metronome is currently on. -->
+                        <button type="button" id="breathing-metronome-toggle-btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); color: var(--text-primary); font-size: 0.8rem; border-radius: 10px; padding: 8px 14px; margin-top: 10px; cursor: pointer;">🔊 메트로놈 켜기</button>
                         <!-- Raw diagnostic readout - hidden by default, toggled by the tester. If a
                              number still never appears despite everything above, this is what shows
                              WHY (current level vs. detection threshold, what's being classified as an
@@ -1069,7 +1077,8 @@ p { color: var(--text-secondary); line-height: 1.5; }
                             <p style="margin: 0 0 6px;"><strong style="color:var(--text-primary);">1) 호흡(환기)은 운동 강도를 심박수만큼, 때로는 심박수보다 더 잘 반영합니다</strong> — 가벼운~중간 강도 운동에서 산소섭취량(VO₂) 대비 상관계수(r²)가 환기량 0.87~0.91, 심박수 0.50~0.83로 보고되었습니다 (Gastinger et al., <em>Journal of Sports Science and Medicine</em> 9, 2010, 110–118, PMID 24149394). 이 논문은 호흡을 측정하는 이유에 대한 근거이며, 아래 계산식의 구체적 수치를 제공하지는 않습니다.</p>
                             <p style="margin: 0 0 6px;"><strong style="color:var(--text-primary);">2) 이 앱이 실제 계산에 사용하는 유일한 기준점</strong>: 첫 환기역치(VT-1, "편하게 대화 가능"에서 "약간 힘듦"으로 바뀌는 지점)의 호흡수는 분당 22~25회(VO₂peak의 약 57~60%)로 측정되었습니다 (Buckley, Terada, Lion & Reed, <em>European Journal of Applied Physiology</em> 124(10), 2024, 2881–2891). 이 앱은 이 절대 수치를 사용자 본인의 실측 안정 시 호흡수와 비교해 "안정 시=0%, VT-1=약 58.5% 심박수 여유(HRR)"인 2점 직선 모델을 만들고, 그 이상 구간은 같은 기울기로 선형 외삽(95%에서 상한)합니다. <u>이 곡선의 구체적 형태(직선, 95% 상한 등)는 논문이 제시한 것이 아니라 이 앱이 그 한 지점을 바탕으로 직접 설계한 것</u>이며, 그 이상의 강도 구간에 대한 데이터는 어떤 논문에도 없습니다.</p>
                             <p style="margin: 0 0 6px;"><strong style="color:var(--text-primary);">3) 휴대폰/이어폰 마이크로 호흡음을 분석해 호흡수를 측정하는 방식</strong> 자체도 검증된 방법입니다 (Nam, Reyes & Chon, <em>IEEE J. Biomedical and Health Informatics</em>, 2016, PMID 26415194; Doheny et al., <em>Biomedical Signal Processing and Control</em> 80, 2023, 104318). 이 두 논문 역시 호흡수-심박수 환산 수치를 제공하지는 않으며, 마이크 기반 측정 방식 자체의 타당성 근거로만 쓰였습니다.</p>
-                            <p style="margin: 0; color: var(--accent-blue);">단, 호흡은 심박수를 박동 단위로 조절하긴 하지만(호흡동성부정맥), 학계에서는 반대로 <strong>심박변이도에서 호흡수를 추출</strong>하는 연구가 대부분이며, 호흡수만으로 정확한 BPM을 역산하는 공인된 공식은 없습니다(Prigent et al., <em>Sensors</em> 21(16), 2021, 5651, 이 방향은 "이론적으로 타당하지 않다"고 명시). 그래서 이 화면의 심박수는 항상 <strong>"Zone 추정치"</strong>이며 실제 심박센서로 측정한 값이 아닙니다.</p>
+                            <p style="margin: 0 0 6px; color: var(--accent-blue);">단, 호흡은 심박수를 박동 단위로 조절하긴 하지만(호흡동성부정맥), 학계에서는 반대로 <strong>심박변이도에서 호흡수를 추출</strong>하는 연구가 대부분이며, 호흡수만으로 정확한 BPM을 역산하는 공인된 공식은 없습니다(Prigent et al., <em>Sensors</em> 21(16), 2021, 5651, 이 방향은 "이론적으로 타당하지 않다"고 명시). 그래서 이 화면의 심박수는 항상 <strong>"Zone 추정치"</strong>이며 실제 심박센서로 측정한 값이 아닙니다.</p>
+                            <p style="margin: 8px 0 0; padding-top: 8px; border-top: 1px solid rgba(59,130,246,0.25);"><strong style="color:var(--text-primary);">4) 기기(줄 이어폰/무선 이어폰/헤드셋/휴대폰)별 오차 대응 — 2026-09 업데이트:</strong> 사용자 보고로 반복된 "호흡수가 실제보다 훨씬 높게 잡힌다"는 오류를 점검한 결과, 들숨과 날숨이 각각 크게 들릴 만큼 신호가 좋을 때(특히 마이크가 입에 가까운 줄 이어폰·헤드셋에서 자주 발생) 들숨 1회+날숨 1회가 서로 다른 두 번의 호흡으로 이중 계산되어 호흡수가 실제의 약 2배로 표시되는 버그를 발견해 수정했습니다. 이 실패 유형(원인은 다르지만 "호흡수가 2배로 잡힘") 자체는 Nam, Reyes & Chon(2016, 위 인용)도 비강 호흡음 분석에서 보고한 바 있어, 신호를 한 번 확인 후 다시 조용해져야만 다음 호흡을 인정하도록(하강 후 재-무장, 표준 피크 검출 기법) 바꿔 해결했습니다. 같은 논문은 또한 "휴대폰 마이크가 코에서 30cm 떨어져 있어도 호흡수 추정 오차가 median 1% 미만"이라고 보고해, 무선 이어폰·휴대폰처럼 마이크가 입에서 먼 기기도 <em>거리 자체보다는 주변 소음</em>이 더 큰 오차 요인임을 뒷받침합니다 — 이 앱이 기기별로 다른 소음 바닥값(noise floor)·임계값을 쓰는 이유입니다. 다만 기기별 정확한 임계값 수치 자체는 이 논문들이 제시한 것이 아니라 이 앱이 설계한 엔지니어링 값이며, 실사용 데이터로 계속 조정되어야 합니다.</p>
                         </div>
 
                         <!-- Breathing metronome settings (breathing mode only). Purely a pacing aid for
@@ -2989,6 +2998,7 @@ p { color: var(--text-secondary); line-height: 1.5; }
       idbPut('settings', state.settings);
     });
     on($('#metronome-sound-test-btn'), 'click', playTestMetronomeTick);
+    on($('#breathing-metronome-toggle-btn'), 'click', toggleMetronomeMidExercise);
 
     on($('#exercise-start-btn'), 'click', startExercise);
     on($('#exercise-pause-btn'), 'click', pauseExercise);
@@ -3133,6 +3143,7 @@ p { color: var(--text-secondary); line-height: 1.5; }
       b.metronomeTimer = setTimeout(tick, delay);
     };
     tick(); // don't wait a full half-cycle before the very first visible/audible cue
+    updateMetronomeToggleBtnLabel();
   }
 
   function stopMetronome(b) {
@@ -3140,6 +3151,32 @@ p { color: var(--text-secondary); line-height: 1.5; }
     if (b.metronomeAudioCtx) { try { b.metronomeAudioCtx.close(); } catch (e) {} b.metronomeAudioCtx = null; }
     const ring = $('#breathing-metronome-ring');
     if (ring) { ring.classList.add('hidden'); ring.classList.remove('metronome-inhale', 'metronome-exhale'); }
+    updateMetronomeToggleBtnLabel();
+  }
+
+  // Reflects the metronome's actual running state (not just the metronomeEnabled setting) on the
+  // mid-workout toggle button, so it stays correct whether the metronome was started/stopped from
+  // that button, the setup-screen checkbox, or automatically via pause/resume.
+  function updateMetronomeToggleBtnLabel() {
+    const btn = $('#breathing-metronome-toggle-btn');
+    if (!btn) return;
+    const isOn = !!(state.exercise.breathing && state.exercise.breathing.metronomeTimer);
+    btn.textContent = isOn ? '🔇 메트로놈 끄기' : '🔊 메트로놈 켜기';
+  }
+
+  // Lets the user turn the metronome on or off at any point DURING a breathing-mode workout,
+  // independent of whatever state.settings.metronomeEnabled was set to before starting - see the
+  // button's own comment in the HTML. Keeps the setting (and its setup-screen checkbox) in sync so
+  // the two controls never disagree.
+  function toggleMetronomeMidExercise() {
+    const b = state.exercise.breathing;
+    const turningOn = !b.metronomeTimer;
+    state.settings.metronomeEnabled = turningOn;
+    idbPut('settings', state.settings);
+    const enabledBox = $('#metronome-enabled-checkbox');
+    if (enabledBox) enabledBox.checked = turningOn;
+    updateMetronomeControlsEnabled();
+    if (turningOn) startMetronome(b); else stopMetronome(b);
   }
 
   function clampMetronomeBpm(bpm) {
