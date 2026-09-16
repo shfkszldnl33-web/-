@@ -269,7 +269,18 @@ p { color: var(--text-secondary); line-height: 1.5; }
 .bar.fat { background: var(--accent-red); }
 
 /* Exercise View */
-.exercise-container { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; }
+/* Bug this fixes (the real cause behind repeated "메트로놈/Zone2 안 보임" reports): this container
+   is `.content-scroll`'s flex box, which scrolls (overflow-y: auto) whenever its content is taller
+   than the viewport. `justify-content: center` on a flex column has NO visible effect while content
+   is shorter than the box (the idle/pre-start exercise screen, with its many setup cards, easily
+   exceeds 70vh, so this looked harmless for months) - but the moment content grows past the box's
+   height while RUNNING (breathing-status-panel appearing, then again once "상세 신호 정보" is
+   opened, adding ~300px), centering pushes roughly half the overflow ABOVE the scrollable area.
+   That region is not just off-screen - `scrollTop` cannot go negative, so there is no way to
+   scroll up far enough to reach it. The BPM circle and "호흡 기반 호흡수 추정" number are the
+   first children, so they were exactly what disappeared - looking indistinguishable from "the
+   metronome/Zone2 feature is broken" even though every number underneath was computing correctly. */
+.exercise-container { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 70vh; }
 .heart-rate-monitor {
     position: relative; width: 200px; height: 200px;
     display: flex; align-items: center; justify-content: center; margin-bottom: 40px;
