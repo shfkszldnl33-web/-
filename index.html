@@ -3261,24 +3261,40 @@ p { color: var(--text-secondary); line-height: 1.5; }
   // ruled out on every device. Use the "소리 테스트" button (playTestMetronomeTick() below) to
   // check whether THIS function's audio works at all, independent of an active mic session.
   function playMetronomeTick(audioCtx, isInhale) {
-    try {
-      if (audioCtx.state !== 'running') {
-        audioCtx.resume().catch((err) => console.warn('[metronome] resume before tick failed', err));
+    // Bug this fixes ("메트로놈 소리가 안 들려"): resume() on a suspended context was fired
+    // WITHOUT waiting for it to actually complete before scheduling the oscillator below - since
+    // resume() is asynchronous, the tick got scheduled against a context that could still be
+    // suspended at that exact instant. Audio scheduled on a suspended context doesn't throw and
+    // doesn't necessarily play once the context resumes moments later either - it just silently
+    // produces no sound for that tick. A live session's context CAN be suspended by the browser
+    // again mid-session (tab backgrounded briefly, OS power-saving, etc. - see the comment this
+    // one replaces), so this wasn't a one-time startup issue, it could drop ticks throughout a
+    // workout. Scheduling only AFTER resume() actually resolves closes that race.
+    const schedule = () => {
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = isInhale ? 1046 : 784;
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.9, now + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } catch (err) {
+        console.warn('[metronome] tick playback failed', err);
       }
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = isInhale ? 1046 : 784;
-      const now = audioCtx.currentTime;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.9, now + 0.004);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + 0.12);
-    } catch (err) {
-      console.warn('[metronome] tick playback failed', err);
+    };
+    if (audioCtx.state !== 'running') {
+      audioCtx.resume().then(schedule).catch((err) => {
+        console.warn('[metronome] resume before tick failed', err);
+        schedule(); // still try - some browsers play an already-scheduled note once resume lands moments later anyway
+      });
+    } else {
+      schedule();
     }
   }
 
