@@ -4,7 +4,7 @@
 // (initServiceWorker(), #app-update-banner, "SKIP_WAITING" message) has something real to talk
 // to. Bump CACHE_NAME whenever the cached files below change so browsers pick up the new
 // version - that's what makes the "새 버전이 준비됐어요" banner appear.
-const CACHE_NAME = 'zone-align-ai-v9';
+const CACHE_NAME = 'zone-align-ai-v10';
 const APP_SHELL = [
   './',
   './index.html',
