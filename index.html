@@ -1620,10 +1620,55 @@ p { color: var(--text-secondary); line-height: 1.5; }
                         <i data-lucide="mic" style="color: var(--accent-red);"></i> 음성 입력
                     </button>
                 </div>
+                <!-- Manual entry: type the food name/grams/kcal/macros directly, with no search
+                     lookup or AI involved - for foods the local DB and AI fallback don't have, or
+                     when the user already knows the exact numbers (e.g. from a package label). -->
+                <button class="primary-btn w-100 mt-15" id="btn-input-manual" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i data-lucide="pencil" style="color: var(--text-secondary);"></i> 직접 입력
+                </button>
                 <button class="primary-btn w-100 mt-20" id="btn-close-input-modal" style="background: #334155;">취소</button>
             </div>
         </div>
         <input type="file" id="gallery-upload" accept="image/*" class="hidden">
+
+        <!-- Manual Diet Entry Modal (직접 입력): name/grams/kcal/macros typed in directly, no
+             search or AI lookup - see btn-input-manual above. -->
+        <div id="manual-diet-modal" class="hidden" style="position: fixed; inset: 0; isolation: isolate; z-index: 2100; background: rgb(5,8,15); display: flex; align-items: center; justify-content: center; padding: 20px;">
+            <div class="glass-card" style="width: 100%; max-width: 360px; padding: 25px 20px; max-height: 85vh; overflow-y: auto;">
+                <div class="flex-row mb-15">
+                    <h3>직접 입력</h3>
+                    <button class="icon-btn" id="btn-close-manual-diet" aria-label="닫기" title="닫기"><i data-lucide="x"></i></button>
+                </div>
+                <div class="form-group">
+                    <label for="manual-diet-name">음식 이름</label>
+                    <input type="text" id="manual-diet-name" placeholder="예: 닭가슴살 샐러드">
+                </div>
+                <div class="form-group">
+                    <label for="manual-diet-qty">양 (g)</label>
+                    <input type="number" id="manual-diet-qty" min="0" step="1" inputmode="numeric" placeholder="예: 150">
+                </div>
+                <div class="form-group">
+                    <label for="manual-diet-kcal">칼로리 (kcal)</label>
+                    <input type="number" id="manual-diet-kcal" min="0" step="1" inputmode="numeric" placeholder="예: 250">
+                </div>
+                <div class="flex-row" style="gap: 10px; align-items: flex-start;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="manual-diet-protein">단백질 (g)</label>
+                        <input type="number" id="manual-diet-protein" min="0" step="0.1" placeholder="0">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="manual-diet-carbs">탄수화물 (g)</label>
+                        <input type="number" id="manual-diet-carbs" min="0" step="0.1" placeholder="0">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="manual-diet-fat">지방 (g)</label>
+                        <input type="number" id="manual-diet-fat" min="0" step="0.1" placeholder="0">
+                    </div>
+                </div>
+                <p class="text-muted" style="font-size: 0.78rem; margin: 0 0 10px;">단백질/탄수화물/지방은 몰라도 괜찮아요 - 비워두면 0으로 기록됩니다.</p>
+                <button class="primary-btn w-100" id="btn-manual-diet-add">식단에 추가</button>
+            </div>
+        </div>
 
         <!-- Exercise Record Detail Modal (tap any item in "모든 기록 리스트" to reopen its full
              post-workout result - avg/max/min BPM, Zone 2 유지율, measurement method, RPE - so nothing
@@ -1715,7 +1760,7 @@ p { color: var(--text-secondary); line-height: 1.5; }
      between them. This forces every OTHER tracked overlay closed whenever one
      of them opens, while still allowing the one intentional stack (meal-detail
      -> diet-input -> food-search) to work as designed. */
-  var ALL_OVERLAY_IDS = ['dtt-modal', 'daily-summary-modal', 'meal-detail-modal', 'food-search-modal', 'diet-input-modal', 'record-detail-modal', 'daily-record-detail-modal'];
+  var ALL_OVERLAY_IDS = ['dtt-modal', 'daily-summary-modal', 'meal-detail-modal', 'food-search-modal', 'diet-input-modal', 'manual-diet-modal', 'record-detail-modal', 'daily-record-detail-modal'];
   function closeOverlay(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); }
   function closeOtherOverlays(exceptIds) {
     ALL_OVERLAY_IDS.forEach(function (id) { if (exceptIds.indexOf(id) === -1) closeOverlay(id); });
@@ -3922,9 +3967,39 @@ p { color: var(--text-secondary); line-height: 1.5; }
     on($('#btn-input-gallery'), 'click', () => { closeOtherOverlays([]); $('#gallery-upload').click(); });
     on($('#btn-input-text'), 'click', () => { $('#diet-input-modal').classList.add('hidden'); openFoodSearchModal(); });
     on($('#btn-input-voice'), 'click', () => { $('#diet-input-modal').classList.add('hidden'); openFoodSearchModal(); startVoiceSearch(); });
+    on($('#btn-input-manual'), 'click', () => { $('#diet-input-modal').classList.add('hidden'); openManualDietModal(); });
     on($('#gallery-upload'), 'change', handleGalleryUpload);
 
+    on($('#btn-close-manual-diet'), 'click', () => $('#manual-diet-modal').classList.add('hidden'));
+    on($('#btn-manual-diet-add'), 'click', submitManualDietEntry);
+
     initFoodSearchModal();
+  }
+
+  function openManualDietModal() {
+    $('#manual-diet-name').value = '';
+    $('#manual-diet-qty').value = '';
+    $('#manual-diet-kcal').value = '';
+    $('#manual-diet-protein').value = '';
+    $('#manual-diet-carbs').value = '';
+    $('#manual-diet-fat').value = '';
+    closeOtherOverlays(['diet-input-modal', 'meal-detail-modal', 'manual-diet-modal']);
+    $('#manual-diet-modal').classList.remove('hidden');
+    setTimeout(() => $('#manual-diet-name').focus(), 50);
+  }
+
+  async function submitManualDietEntry() {
+    const name = $('#manual-diet-name').value.trim();
+    const qty = Number($('#manual-diet-qty').value);
+    const kcal = Number($('#manual-diet-kcal').value);
+    if (!name) { showToast('음식 이름을 입력해주세요.'); return; }
+    if (!Number.isFinite(qty) || qty <= 0) { showToast('양(g)을 올바르게 입력해주세요.'); return; }
+    if (!Number.isFinite(kcal) || kcal < 0) { showToast('칼로리를 올바르게 입력해주세요.'); return; }
+    const protein = Number($('#manual-diet-protein').value) || 0;
+    const carbs = Number($('#manual-diet-carbs').value) || 0;
+    const fat = Number($('#manual-diet-fat').value) || 0;
+    await addDietEntry({ name, qty, unit: 'g', kcal: Math.round(kcal), protein, carbs, fat });
+    $('#manual-diet-modal').classList.add('hidden');
   }
 
   function renderDietView() {
