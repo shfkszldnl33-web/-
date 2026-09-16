@@ -1011,6 +1011,20 @@ p { color: var(--text-secondary); line-height: 1.5; }
                              therefore the setup-screen checkbox) in sync, so the two controls never
                              disagree about whether the metronome is currently on. -->
                         <button type="button" id="breathing-metronome-toggle-btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--card-border); color: var(--text-primary); font-size: 0.8rem; border-radius: 10px; padding: 8px 14px; margin-top: 10px; cursor: pointer;">🔊 메트로놈 켜기</button>
+                        <!-- Mid-workout BPM adjustment: the setup-screen slider (#metronome-bpm-slider)
+                             lives inside #exercise-mode-selection, which is hidden the moment a workout
+                             starts, so there was previously no way to change speed once running - only
+                             on/off. This mirrors that slider's exact behavior (updates
+                             state.settings.metronomeBpm, saves it, calls restartMetronomeIfRunning())
+                             from a control that's actually visible during a session. Both sliders are
+                             kept in sync from either direction - see syncExerciseSettingsUi(). -->
+                        <div class="mt-10" style="max-width: 220px; margin-left: auto; margin-right: auto;">
+                            <div class="flex-row" style="align-items: center; justify-content: space-between;">
+                                <label for="breathing-metronome-bpm-slider" style="font-size: 0.78rem; color: var(--text-secondary);">속도</label>
+                                <span id="breathing-metronome-bpm-value" style="font-size: 0.78rem; color: var(--text-primary); font-weight: 600;">분당 12회</span>
+                            </div>
+                            <input type="range" id="breathing-metronome-bpm-slider" min="4" max="30" step="1" value="12" style="width: 100%; margin: 6px 0 0; accent-color: var(--accent-green);">
+                        </div>
                         <!-- Raw diagnostic readout - hidden by default, toggled by the tester. If a
                              number still never appears despite everything above, this is what shows
                              WHY (current level vs. detection threshold, what's being classified as an
@@ -1646,6 +1660,11 @@ p { color: var(--text-secondary); line-height: 1.5; }
         <div id="diet-input-modal" class="hidden" style="position: fixed; inset: 0; isolation: isolate; z-index: 2000; background: rgb(5,8,15); display: flex; align-items: center; justify-content: center;">
             <div class="glass-card" style="width: 85%; padding: 25px 20px; text-align: center;">
                 <h3 style="margin-bottom: 20px;">음식 추가 방식을 선택하세요</h3>
+                <!-- 2x2 grid, all four ways to add a food treated as equal peers (camera was
+                     removed - see btn-input-gallery's own comment history). Manual entry used to
+                     sit apart as its own full-width button below this grid, which read as an
+                     odd one out; folding it into the same grid gives a clean, balanced layout
+                     instead of 3-in-a-2-column-grid-plus-1-stray-row. -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <button class="primary-btn" id="btn-input-gallery" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px;">
                         <i data-lucide="image" style="color: var(--accent-blue);"></i> 갤러리
@@ -1656,13 +1675,13 @@ p { color: var(--text-secondary); line-height: 1.5; }
                     <button class="primary-btn" id="btn-input-voice" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px;">
                         <i data-lucide="mic" style="color: var(--accent-red);"></i> 음성 입력
                     </button>
+                    <!-- Manual entry: type the food name/grams/kcal/macros directly, with no search
+                         lookup or AI involved - for foods the local DB and AI fallback don't have,
+                         or when the user already knows the exact numbers (e.g. package label). -->
+                    <button class="primary-btn" id="btn-input-manual" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <i data-lucide="pencil" style="color: var(--text-secondary);"></i> 직접 입력
+                    </button>
                 </div>
-                <!-- Manual entry: type the food name/grams/kcal/macros directly, with no search
-                     lookup or AI involved - for foods the local DB and AI fallback don't have, or
-                     when the user already knows the exact numbers (e.g. from a package label). -->
-                <button class="primary-btn w-100 mt-15" id="btn-input-manual" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <i data-lucide="pencil" style="color: var(--text-secondary);"></i> 직접 입력
-                </button>
                 <button class="primary-btn w-100 mt-20" id="btn-close-input-modal" style="background: #334155;">취소</button>
             </div>
         </div>
@@ -3033,12 +3052,8 @@ p { color: var(--text-secondary); line-height: 1.5; }
       updateMetronomeControlsEnabled();
       restartMetronomeIfRunning();
     });
-    on($('#metronome-bpm-slider'), 'input', (e) => {
-      state.settings.metronomeBpm = Number(e.target.value) || 12;
-      $('#metronome-bpm-value').textContent = `분당 ${state.settings.metronomeBpm}회`;
-      idbPut('settings', state.settings);
-      restartMetronomeIfRunning();
-    });
+    on($('#metronome-bpm-slider'), 'input', (e) => applyMetronomeBpm(e.target.value));
+    on($('#breathing-metronome-bpm-slider'), 'input', (e) => applyMetronomeBpm(e.target.value));
     on($('#metronome-sound-checkbox'), 'change', (e) => {
       state.settings.metronomeSound = !!e.target.checked;
       idbPut('settings', state.settings);
@@ -3076,6 +3091,26 @@ p { color: var(--text-secondary); line-height: 1.5; }
   // again once boot() actually has real settings loaded (see boot()) - without that second call,
   // these controls always showed their hard-coded HTML defaults after a page reload, never the
   // value the user had actually saved last time.
+  // Shared by the setup-screen slider and the mid-workout slider (see the latter's HTML comment) -
+  // whichever one the user actually touches, this updates state.settings, persists it, keeps BOTH
+  // sliders' displayed value/position in sync, and applies the new speed immediately if a
+  // breathing session is already running.
+  function applyMetronomeBpm(rawValue) {
+    const bpm = Number(rawValue) || 12;
+    state.settings.metronomeBpm = bpm;
+    const label = `분당 ${bpm}회`;
+    const setupSlider = $('#metronome-bpm-slider');
+    if (setupSlider) setupSlider.value = String(bpm);
+    const setupValue = $('#metronome-bpm-value');
+    if (setupValue) setupValue.textContent = label;
+    const liveSlider = $('#breathing-metronome-bpm-slider');
+    if (liveSlider) liveSlider.value = String(bpm);
+    const liveValue = $('#breathing-metronome-bpm-value');
+    if (liveValue) liveValue.textContent = label;
+    idbPut('settings', state.settings);
+    restartMetronomeIfRunning();
+  }
+
   function syncExerciseSettingsUi() {
     if (!state.settings) return;
     const dttSel = $('#dtt-interval-select');
@@ -3087,6 +3122,10 @@ p { color: var(--text-secondary); line-height: 1.5; }
     if (bpmSlider) bpmSlider.value = String(state.settings.metronomeBpm || 12);
     const bpmValue = $('#metronome-bpm-value');
     if (bpmValue) bpmValue.textContent = `분당 ${state.settings.metronomeBpm || 12}회`;
+    const liveBpmSlider = $('#breathing-metronome-bpm-slider');
+    if (liveBpmSlider) liveBpmSlider.value = String(state.settings.metronomeBpm || 12);
+    const liveBpmValue = $('#breathing-metronome-bpm-value');
+    if (liveBpmValue) liveBpmValue.textContent = `분당 ${state.settings.metronomeBpm || 12}회`;
     const soundBox = $('#metronome-sound-checkbox');
     if (soundBox) soundBox.checked = !!state.settings.metronomeSound;
     updateMetronomeControlsEnabled();
