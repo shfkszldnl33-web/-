@@ -1647,9 +1647,6 @@ p { color: var(--text-secondary); line-height: 1.5; }
             <div class="glass-card" style="width: 85%; padding: 25px 20px; text-align: center;">
                 <h3 style="margin-bottom: 20px;">음식 추가 방식을 선택하세요</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <button class="primary-btn" id="btn-input-camera" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                        <i data-lucide="camera" style="color: var(--accent-green);"></i> 카메라
-                    </button>
                     <button class="primary-btn" id="btn-input-gallery" style="background: rgba(255,255,255,0.1); border: 1px solid var(--card-border); color: #fff; display: flex; flex-direction: column; align-items: center; gap: 8px;">
                         <i data-lucide="image" style="color: var(--accent-blue);"></i> 갤러리
                     </button>
@@ -2307,6 +2304,24 @@ p { color: var(--text-secondary); line-height: 1.5; }
 
   function computeMacros(food, qty) {
     const ratio = isWeightUnit(food.unit) ? (Number(qty) || 0) / food.base : (Number(qty) || 0);
+    return {
+      kcal: Math.round(food.kcal * ratio),
+      protein: Math.round(food.protein * ratio * 10) / 10,
+      carbs: Math.round(food.carbs * ratio * 10) / 10,
+      fat: Math.round(food.fat * ratio * 10) / 10,
+      sugar: food.sugar ? Math.round(food.sugar * ratio * 10) / 10 : null,
+      sodium: food.sodium ? Math.round(food.sodium * ratio) : null,
+    };
+  }
+
+  // Same scaling math as computeMacros(), but for callers whose qty is ALWAYS a gram amount
+  // regardless of the food's own display unit - see normalizeScanItem()'s comment for why this
+  // exists separately. Every FOOD_DB entry's `base` is itself a gram weight (e.g. 김밥 1줄 ≈
+  // base:200, meaning 200g), even for count-style units like "줄"/"인분"/"개" - so dividing by
+  // base is always correct here, unlike computeMacros() which treats a non-weight unit's qty as
+  // a unit COUNT (e.g. "2줄") rather than grams.
+  function computeMacrosFromGrams(food, grams) {
+    const ratio = food.base > 0 ? (Number(grams) || 0) / food.base : 0;
     return {
       kcal: Math.round(food.kcal * ratio),
       protein: Math.round(food.protein * ratio * 10) / 10,
@@ -4031,7 +4046,6 @@ p { color: var(--text-secondary); line-height: 1.5; }
     // it - must be closed first. Otherwise an opaque modal is left sitting on top of the scan
     // view, making it look like the screen froze or went blank (found via testing the new
     // AI photo-analysis flow, but this affected the original camera/gallery buttons too).
-    on($('#btn-input-camera'), 'click', () => { closeOtherOverlays([]); openScanView('camera'); });
     on($('#btn-input-gallery'), 'click', () => { closeOtherOverlays([]); $('#gallery-upload').click(); });
     on($('#btn-input-text'), 'click', () => { $('#diet-input-modal').classList.add('hidden'); openFoodSearchModal(); });
     on($('#btn-input-voice'), 'click', () => { $('#diet-input-modal').classList.add('hidden'); openFoodSearchModal(); startVoiceSearch(); });
@@ -4804,7 +4818,15 @@ p { color: var(--text-secondary); line-height: 1.5; }
         const isExactMatch = best.name.toLowerCase() === normalizedName
           || (Array.isArray(best.aliases) && best.aliases.some((a) => a.toLowerCase() === normalizedName));
         if (isExactMatch) {
-          const macros = computeMacros(best, item.qty);
+          // item.qty here is always a GRAM amount (the AI's estimated_amount_g, or the user's
+          // own edited grams) - never a unit count - regardless of whether `best` is normally
+          // displayed in "g" or a count unit like "줄"/"인분". Bug this fixes: using the generic
+          // computeMacros() here treated qty as a raw unit COUNT for any non-weight-unit food
+          // (e.g. 김밥, unit "줄"), so a 200g portion produced ratio=200 instead of 1 - macros
+          // (and kcal) came out roughly 100x too high. computeMacrosFromGrams() always divides
+          // by the food's gram-equivalent `base`, which is correct for every entry regardless of
+          // display unit.
+          const macros = computeMacrosFromGrams(best, item.qty);
           item.kcal = macros.kcal;
           item.carbs = macros.carbs;
           item.protein = macros.protein;
@@ -4814,7 +4836,40 @@ p { color: var(--text-secondary); line-height: 1.5; }
         }
       }
     } catch (err) { /* local DB lookup is a best-effort enhancement, never fatal */ }
+    // Bug this fixes ("사진 분석 성분이 틀렸어"): the "섭취량(g)" field in the edit panel used
+    // to be a plain, independent number - typing a different gram amount there changed ONLY
+    // that number, while kcal/carbs/protein/fat/fiber/sugar/sodium stayed exactly as first
+    // estimated. Someone adjusting the amount (e.g. "실제로는 반만 먹었다") had no way to get
+    // correct composition numbers without manually recalculating and retyping every single
+    // field themselves - and if they only touched the amount, every other number silently
+    // became wrong for that amount. Capturing this item's original amount/macros as a fixed
+    // ratio base lets the new quantity stepper (see renderScanResult) rescale every number
+    // together and correctly, the same way the food-search quantity panel already does.
+    item.baseQty = item.qty || 1;
+    item.baseKcal = item.kcal;
+    item.baseCarbs = item.carbs;
+    item.baseProtein = item.protein;
+    item.baseFat = item.fat;
+    item.baseFiber = item.fiber;
+    item.baseSugar = item.sugar;
+    item.baseSodium = item.sodium;
     return item;
+  }
+
+  // Rescales every macro on a scanned item to a new gram amount, proportional to that item's
+  // original (AI-estimated or DB-matched) amount/macros - see normalizeScanItem()'s comment for
+  // why this replaced independently editing the amount and macro fields.
+  function rescaleScanItem(item, newQty) {
+    const q = Math.max(0, newQty);
+    const ratio = item.baseQty > 0 ? q / item.baseQty : 1;
+    item.qty = q;
+    item.kcal = Math.round(item.baseKcal * ratio);
+    item.carbs = Math.round(item.baseCarbs * ratio * 10) / 10;
+    item.protein = Math.round(item.baseProtein * ratio * 10) / 10;
+    item.fat = Math.round(item.baseFat * ratio * 10) / 10;
+    item.fiber = Math.round(item.baseFiber * ratio * 10) / 10;
+    item.sugar = Math.round(item.baseSugar * ratio * 10) / 10;
+    item.sodium = Math.round(item.baseSodium * ratio);
   }
 
   // Server-side Gemini path: sends the (already-resized) photo to this app's own
@@ -5079,6 +5134,11 @@ p { color: var(--text-secondary); line-height: 1.5; }
             <button class="food-item-remove-btn scan-item-edit-btn" data-idx="${idx}" aria-label="수정"><i data-lucide="pencil"></i></button>
             <button class="food-item-remove-btn" data-idx="${idx}" data-remove="1" aria-label="삭제"><i data-lucide="x"></i></button>
           </div>
+        </div>
+        <div class="scan-item-qty-stepper" style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+          <button type="button" class="scan-qty-minus" data-idx="${idx}" aria-label="양 줄이기" style="width:28px; height:28px; border-radius:50%; border:1px solid var(--card-border); background:rgba(255,255,255,0.06); color:var(--text-primary); font-size:1.1rem; cursor:pointer; flex-shrink:0;">−</button>
+          <span style="font-size:0.85rem; color:var(--text-secondary);">${item.qty}${item.unit || 'g'}</span>
+          <button type="button" class="scan-qty-plus" data-idx="${idx}" aria-label="양 늘리기" style="width:28px; height:28px; border-radius:50%; border:1px solid var(--card-border); background:rgba(255,255,255,0.06); color:var(--text-primary); font-size:1.1rem; cursor:pointer; flex-shrink:0;">+</button>
         </div>`;
       listEl.appendChild(row);
     });
@@ -5100,6 +5160,16 @@ p { color: var(--text-secondary); line-height: 1.5; }
     }));
     $all('.scan-item-edit-btn', listEl).forEach((btn) => on(btn, 'click', () => {
       scanEditingIdx = Number(btn.dataset.idx);
+      renderScanResult();
+    }));
+    $all('.scan-qty-minus', listEl).forEach((btn) => on(btn, 'click', () => {
+      const item = scanDraftItems[Number(btn.dataset.idx)];
+      rescaleScanItem(item, item.qty - 10);
+      renderScanResult();
+    }));
+    $all('.scan-qty-plus', listEl).forEach((btn) => on(btn, 'click', () => {
+      const item = scanDraftItems[Number(btn.dataset.idx)];
+      rescaleScanItem(item, item.qty + 10);
       renderScanResult();
     }));
     $all('.scan-item-edit-cancel', listEl).forEach((btn) => on(btn, 'click', () => {
@@ -5127,6 +5197,18 @@ p { color: var(--text-secondary); line-height: 1.5; }
         userEdited: true,
         dbMatched: false,
       };
+      // Re-anchor the quantity stepper's scaling base to what was just typed in by hand -
+      // otherwise a later +/-10g tap would scale from the AI's original (possibly wrong)
+      // numbers instead of the values the user just corrected.
+      const edited = scanDraftItems[idx];
+      edited.baseQty = edited.qty || 1;
+      edited.baseKcal = edited.kcal;
+      edited.baseCarbs = edited.carbs;
+      edited.baseProtein = edited.protein;
+      edited.baseFat = edited.fat;
+      edited.baseFiber = edited.fiber;
+      edited.baseSugar = edited.sugar;
+      edited.baseSodium = edited.sodium;
       scanEditingIdx = null;
       renderScanResult();
     }));
