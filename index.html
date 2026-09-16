@@ -1308,24 +1308,6 @@ p { color: var(--text-secondary); line-height: 1.5; }
                         <button class="primary-btn w-100" id="btn-open-records" style="background: var(--card-border); color: var(--text-primary); border: 1px solid var(--text-secondary);">전체 기록 열람하기</button>
                     </div>
 
-                    <h3 class="section-title mt-20">건강 설정</h3>
-                    <div class="settings-list">
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <i data-lucide="activity"></i>
-                                <span>질환 정보 (고혈압 등)</span>
-                            </div>
-                            <i data-lucide="chevron-right"></i>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <i data-lucide="coffee"></i>
-                                <span>식이 선호도</span>
-                            </div>
-                            <i data-lucide="chevron-right"></i>
-                        </div>
-                    </div>
-
                     <!-- The "AI 식단 분석 설정" card (personal Gemini API key input, model field,
                          and "키 발급받기" link/instructions) has been removed on purpose. Food-photo
                          analysis is now always handled by this app's own /api/analyze-food
@@ -3079,6 +3061,16 @@ p { color: var(--text-secondary); line-height: 1.5; }
       ring.style.transitionDuration = (halfCycleMs / 1000) + 's';
     }
     let phase = 'exhale'; // first tick below flips this to 'inhale', so the ring visibly moves right away
+    // Bug this fixes ("메트로놈 박자가 안 맞아"): a plain `setInterval(tick, halfCycleMs)` only
+    // schedules each firing halfCycleMs after the PREVIOUS one actually ran, so any delay in one
+    // tick (main-thread contention from the mic-analysis rAF loop doing DSP work every frame,
+    // GC pauses, background-tab throttling, etc.) permanently pushes every following tick back by
+    // that same amount - drift accumulates over the length of a workout instead of correcting
+    // itself. Scheduling against an absolute target time (startTime + tickCount * halfCycleMs)
+    // and re-deriving each setTimeout's delay from "how far away is that target now" keeps the
+    // beat locked to the real clock instead of drifting further out of tempo the longer it runs.
+    const startTime = (window.performance && performance.now) ? performance.now() : Date.now();
+    let tickCount = 0;
     const tick = () => {
       phase = phase === 'inhale' ? 'exhale' : 'inhale';
       if (ring) {
@@ -3087,13 +3079,18 @@ p { color: var(--text-secondary); line-height: 1.5; }
       }
       if (label) label.textContent = phase === 'inhale' ? '들이쉬기' : '내쉬기';
       if (state.settings.metronomeSound && b.metronomeAudioCtx) playMetronomeTick(b.metronomeAudioCtx, phase === 'inhale');
+
+      tickCount += 1;
+      const now = (window.performance && performance.now) ? performance.now() : Date.now();
+      const nextTargetAt = startTime + tickCount * halfCycleMs;
+      const delay = Math.max(0, nextTargetAt - now);
+      b.metronomeTimer = setTimeout(tick, delay);
     };
     tick(); // don't wait a full half-cycle before the very first visible/audible cue
-    b.metronomeTimer = setInterval(tick, halfCycleMs);
   }
 
   function stopMetronome(b) {
-    if (b.metronomeTimer) { clearInterval(b.metronomeTimer); b.metronomeTimer = null; }
+    if (b.metronomeTimer) { clearTimeout(b.metronomeTimer); b.metronomeTimer = null; }
     if (b.metronomeAudioCtx) { try { b.metronomeAudioCtx.close(); } catch (e) {} b.metronomeAudioCtx = null; }
     const ring = $('#breathing-metronome-ring');
     if (ring) { ring.classList.add('hidden'); ring.classList.remove('metronome-inhale', 'metronome-exhale'); }
