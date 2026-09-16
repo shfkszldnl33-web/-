@@ -807,24 +807,14 @@ p { color: var(--text-secondary); line-height: 1.5; }
                             <label for="auth-age">나이 (만)</label>
                             <input type="number" id="auth-age" placeholder="예: 35" required min="10" max="100">
                         </div>
-                        <!-- Device type drives which breathing-detection profile (device-profile.js
-                             DEVICE_PROFILES) is used as the calibration starting point - see
-                             estimateZoneAndBpmFromBreathing()'s pipeline in app.js. This is only a
-                             starting point: the 5-second calibration step that runs at the start of
-                             each breathing-mode session re-measures the actual signal for this
-                             specific device+user, so picking the wrong one here is not fatal, just
-                             a worse starting guess. Can also be changed later from the exercise
-                             screen's measurement-mode selector. -->
-                        <div class="form-group mt-15">
-                            <label>운동 중 사용할 기기 종류</label>
-                            <div class="device-type-grid" id="auth-device-type-grid">
-                                <button type="button" class="device-type-btn active" data-device="wired">줄 이어폰</button>
-                                <button type="button" class="device-type-btn" data-device="wireless">무선 이어폰</button>
-                                <button type="button" class="device-type-btn" data-device="headset">헤드셋</button>
-                                <button type="button" class="device-type-btn" data-device="phone">휴대폰 마이크</button>
-                            </div>
-                            <p class="text-muted" style="font-size: 0.72rem; margin-top: 6px;">호흡 마이크 분석의 기본 보정값을 고를 기기에 맞춰 설정해요. 실제 사용 중 5초 보정으로 다시 맞춰지니, 나중에 바꿔도 괜찮아요.</p>
-                        </div>
+                        <!-- The "운동 중 사용할 기기 종류" question that used to live here was removed
+                             per request - it duplicated the exercise screen's own device-type
+                             selector (#exercise-device-type-grid), which is shown every time before
+                             a breathing-mode session anyway and is what actually determines the
+                             calibration profile in practice (see startBreathingAnalysis()). Removing
+                             it from signup is pure de-duplication: selectedAuthDeviceType still
+                             defaults to BreathingEngine.DEFAULT_DEVICE_ID ('phone'), so a fresh
+                             profile gets a sensible starting device type either way. -->
                         <div class="checkbox-group mt-20">
                             <input type="checkbox" id="auth-keep-login">
                             <label for="auth-keep-login">로그인 항상 유지</label>
