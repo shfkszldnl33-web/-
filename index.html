@@ -3051,6 +3051,7 @@ p { color: var(--text-secondary); line-height: 1.5; }
   function startMetronome(b) {
     if (!state.settings || !state.settings.metronomeEnabled) return;
     stopMetronome(b); // guard against double-starting (e.g. a rapid setting change)
+    stopTestMetronomeTick(); // silence any "소리 테스트" preview still playing (see its own comment)
     ensureMetronomeAudioCtx(b);
     const bpm = clampMetronomeBpm(state.settings.metronomeBpm);
     const halfCycleMs = 30000 / bpm; // half a breath cycle (60000/bpm/2): one inhale + one exhale per full cycle
@@ -3188,6 +3189,16 @@ p { color: var(--text-secondary); line-height: 1.5; }
       console.warn('[metronome] test tick failed', err);
       showToast('이 기기/브라우저에서 소리를 재생할 수 없어요.');
     }
+  }
+
+  // Bug this fixes ("메트로놈 소리가 중복 돼"): "소리 테스트" runs on its OWN timer/AudioContext,
+  // independent of the real session's startMetronome(). If a user starts a workout while that
+  // preview is still mid-playback (it runs for 3 full cycles, which at a slow BPM can be many
+  // seconds), the preview's ticks and the real session's ticks fire concurrently - two overlapping
+  // metronomes audibly stacked on top of each other. Stopping the preview whenever a real session
+  // starts ensures only one metronome is ever ticking at a time.
+  function stopTestMetronomeTick() {
+    if (testMetronomeTimer) { clearInterval(testMetronomeTimer); testMetronomeTimer = null; }
   }
 
   function updateHrSourceLabel(text) {
