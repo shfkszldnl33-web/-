@@ -160,6 +160,14 @@ async function handlePhotoAnalysis(body, apiKey, res) {
 
   const rawFoods = extractJsonFoods(text);
   if (!rawFoods) {
+    // Bug this fixes: this branch previously logged nothing, so a real failure here was
+    // undiagnosable from Vercel's function logs - the only clue was the generic client-facing
+    // "AI 응답을 이해하지 못했어요" message. Logging Gemini's actual raw text (server-side only,
+    // never sent to the client) means the next time this happens, the site owner can open
+    // Vercel Dashboard -> Deployments -> [deployment] -> Functions -> Logs and see exactly what
+    // came back (a refusal/disclaimer with no JSON at all, malformed JSON, truncated output, etc.)
+    // instead of guessing blind.
+    console.error('[analyze-food] could not extract a foods array from Gemini response:', text);
     fail(res, 502, 'BAD_SHAPE', 'AI 응답을 이해하지 못했어요. 사진을 다시 찍거나 검색으로 직접 추가해주세요.');
     return;
   }
@@ -189,6 +197,7 @@ async function handleTextLookup(body, apiKey, res) {
 
   const food = extractJsonObject(text);
   if (!food || !food.name) {
+    console.error('[analyze-food] could not extract a food object from Gemini response:', text);
     fail(res, 502, 'BAD_SHAPE', 'AI 응답을 이해하지 못했어요. 다시 시도해주세요.');
     return;
   }
@@ -277,29 +286,45 @@ function respondGeminiError(res, err) {
   fail(res, status, code, message);
 }
 
-// The model is asked for pure JSON but may still wrap it in prose or code fences - pull out the
-// first {...} or [...] block before parsing, and never trust the shape blindly.
-function extractJsonFoods(text) {
+// The model is asked for pure JSON but may still wrap it in ```json ... ``` code fences, add a
+// disclaimer sentence before/after, or leave a trailing comma before a `]`/`}` (all common despite
+// being told not to). Strip fences first, pull out the outermost {...} or [...] block, and fall
+// back to a trailing-comma repair before giving up - each step only ever narrows toward valid
+// JSON, never guesses at content.
+function stripCodeFences(text) {
+  return text.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
+}
+
+function tryParseJson(jsonText) {
   try {
-    const objMatch = text.match(/\{[\s\S]*\}/);
-    const arrMatch = text.match(/\[[\s\S]*\]/);
-    const jsonText = objMatch ? objMatch[0] : (arrMatch ? arrMatch[0] : null);
-    if (!jsonText) return null;
-    const parsed = JSON.parse(jsonText);
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed && Array.isArray(parsed.foods)) return parsed.foods;
-    return null;
+    return JSON.parse(jsonText);
   } catch (e) {
-    return null;
+    // Trailing comma before a closing bracket/brace is the single most common way an LLM's
+    // otherwise-correct JSON fails to parse - safe to repair mechanically since it only ever
+    // removes a comma that valid JSON could never have there anyway.
+    try {
+      return JSON.parse(jsonText.replace(/,(\s*[}\]])/g, '$1'));
+    } catch (e2) {
+      return null;
+    }
   }
 }
 
+function extractJsonFoods(text) {
+  const cleaned = stripCodeFences(text);
+  const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+  const jsonText = objMatch ? objMatch[0] : (arrMatch ? arrMatch[0] : null);
+  if (!jsonText) return null;
+  const parsed = tryParseJson(jsonText);
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && Array.isArray(parsed.foods)) return parsed.foods;
+  return null;
+}
+
 function extractJsonObject(text) {
-  try {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    return JSON.parse(match[0]);
-  } catch (e) {
-    return null;
-  }
+  const cleaned = stripCodeFences(text);
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  return tryParseJson(match[0]);
 }
