@@ -60,6 +60,17 @@ NUTRITION_API_KEY=발급받은_실제_영양정보_API_키
 
 `api/` 폴더(두 함수 모두)만 별도로 Vercel에 배포하고, GitHub Pages의 `index.html`이 `https://<your-project>.vercel.app/api/analyze-food`와 `/api/nutrition-info`로 요청하도록 두 `fetch(...)` 호출부의 경로를 절대경로로 바꿔주면 됩니다(현재는 같은 도메인에서 서비스한다는 가정하에 상대경로로 되어 있습니다). 이 경우 Vercel 쪽 **Environment Variables**에 `ALLOWED_ORIGIN`을 GitHub Pages 도메인(예: `https://shfkszldnl33-web.github.io`)으로 설정해 CORS를 그 도메인으로만 제한하는 것을 권장합니다. 값을 비워두거나 `*`로 두면 모든 도메인에서의 호출을 허용합니다(기본값).
 
+## PWA 캐시 버전 관리 (중요 - 배포할 때마다 확인)
+
+이 앱은 `service-worker.js`가 `index.html`/`breathing-engine.js`를 **캐시 우선(cache-first)** 으로 서빙하는 PWA입니다. 브라우저는 `service-worker.js` **파일 자체의 바이트가 바뀌어야만** 새 버전이 있다는 걸 감지합니다.
+
+**`index.html`이나 `breathing-engine.js`를 고칠 때마다, `service-worker.js`의 `CACHE_NAME`도 반드시 같이 올리세요** (`zone-align-ai-v1` → `v2` → `v3` ...). `CACHE_NAME`을 안 올리면:
+
+- 브라우저가 업데이트 자체를 감지하지 못해 `index.html` 안의 "새 버전이 준비됐어요" 배너가 영영 뜨지 않고,
+- 이미 한 번이라도 앱을 열어본 사용자는 아무리 새 코드를 배포해도 **캐시에 저장된 예전 버전**을 계속 보게 됩니다.
+
+2026-09-16에 정확히 이 문제로 메트로놈/Zone 2 측정/상세 신호 정보 패널이 "고장 난 것처럼" 보였던 적이 있습니다 (실제 코드는 정상이었고, 원인은 `CACHE_NAME`이 초기 커밋 이후 한 번도 안 올라간 것). 그때 `v1` → `v2`로 올려서 해결했습니다.
+
 ## 영양정보 API 설정
 
 `api/nutrition-info.js`는 음식 검색 화면(직접 이름을 입력해 영양정보를 찾는 기능)에서 사용하는 별도의 서버리스 함수입니다. 요청받은 대로 API 키를 **`NUTRITION_API_KEY`라는 별도의 환경변수**로 읽으며, 코드 어디에도 키 값 자체는 적혀 있지 않습니다.
