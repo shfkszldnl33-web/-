@@ -3052,7 +3052,13 @@ p { color: var(--text-secondary); line-height: 1.5; }
     // one below - during an actual workout the real metronome is already audibly playing, and
     // triggering this separate preview on top of it would reproduce the overlapping-sound bug
     // fixed elsewhere (see stopTestMetronomeTick()'s own comment).
-    on($('#metronome-bpm-slider'), 'input', (e) => { applyMetronomeBpm(e.target.value); playTestMetronomeTick(); });
+    on($('#metronome-bpm-slider'), 'input', (e) => {
+      applyMetronomeBpm(e.target.value);
+      // Only auto-preview when sound is actually enabled - playTestMetronomeTick() now shows a
+      // toast when it isn't, which would fire on every single drag tick otherwise (spammy).
+      // Silence during a drag while the checkbox is off is itself the correct, honest preview.
+      if (state.settings && state.settings.metronomeSound) playTestMetronomeTick();
+    });
     on($('#breathing-metronome-bpm-slider'), 'input', (e) => applyMetronomeBpm(e.target.value));
     on($('#metronome-sound-checkbox'), 'change', (e) => {
       state.settings.metronomeSound = !!e.target.checked;
@@ -3350,6 +3356,18 @@ p { color: var(--text-secondary); line-height: 1.5; }
   let testAudioCtx = null;
   let testMetronomeTimer = null;
   async function playTestMetronomeTick() {
+    // Bug this fixes ("운동 시작하면 메트로놈이 켜져있다고 하는데 소리가 안들려"): this preview
+    // used to always play regardless of the "소리로도 안내" checkbox, since its original purpose
+    // was checking whether audio works on this device/browser AT ALL, independent of settings.
+    // In practice that meant testing sound before a workout while that checkbox was off gave the
+    // false impression sound would play during the real session too - it never does, since
+    // startMetronome()'s tick() only calls playMetronomeTick() when metronomeSound is actually
+    // true. Gating the preview on the same flag makes "did I hear it during setup?" a reliable
+    // predictor of "will I hear it during the workout?" instead of the two disagreeing.
+    if (!state.settings || !state.settings.metronomeSound) {
+      showToast('소리를 들으려면 먼저 "소리로도 안내"를 켜주세요.');
+      return;
+    }
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!testAudioCtx) testAudioCtx = new AudioCtx();
